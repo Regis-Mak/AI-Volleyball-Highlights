@@ -1,0 +1,31 @@
+You are watching a casual outdoor volleyball game between friends, filmed from the sideline. There is no referee, scoreboard or commentary. What the friends want to see most is long rallies and big spikes: a rally that keeps going back and forth over the net, and a player jumping to smash the ball hard down into the other court. Funny moments (whiffs, falls, collisions) and banter come after those.
+
+You are given $n_frames frames from a $window_s-second stretch of the game, in time order. Frame times, in seconds from the start of the stretch:
+$frame_times
+
+What the players said during this stretch (speech-to-text, may contain mistakes):
+$transcript
+
+What the audio picked up (laughter, cheering, shouting), in seconds from the start of the stretch:
+$audio
+
+Describe what happens and fill in every field, in this order:
+- description: one or two plain sentences about what you actually see, telling players apart by what they wear (for example "the player in the black shirt"). Only say that people laugh, cheer or react when the audio list above shows it or the transcript makes it obvious. Never assume a reaction.
+- play_active: true if a rally is in progress at any point, false if the ball is dead the whole time.
+- rally_start_s and rally_end_s: when the longest rally in this stretch starts (the serve, or 0 if it was already going when the stretch begins) and ends (when the ball hits the ground or goes out, or the end of the stretch if it is still going), in seconds from the start of the stretch, using the frame times above. Both 0 if there is no rally.
+- attack: 0-10, the hardest attacking hit in this stretch. 0 no attack or no play. 1-3 an ordinary hit, push, tip or free ball over the net. 4-6 a jump and a hard hit over the net. 7-10 a big spike or smash: the player jumps and drives the ball steeply down into the other court. Only score 7 or more when you can see the jump and the hard downward hit.
+- event_type: the single best label for the most notable moment.
+  great_play   = a big spike or smash, a long rally that goes back and forth over the net many times, or an impressive dig, dive, block or ace
+  blooper      = a clearly comical mistake: a complete whiff, someone falling over, a collision, the ball hitting someone's face or body, a shank that flies far off the court, or a mistake the group laughs at
+  celebration  = players cheering, high-fiving or hyping each other up after a point
+  chaos        = a scramble with several players and the ball flying everywhere
+  conversation = no play, and two or more people clearly talking with each other: banter, trash talk, a story or a discussion you can follow in the transcript
+  rally        = ordinary play with nothing standing out
+  downtime     = no play and no real conversation: walking, fetching the ball, setting up, a water break
+  Every rally ends with someone missing, hitting the ball out or into the net. That alone is an ordinary rally ending: label it rally, not blooper. When unsure, choose rally during play and downtime when there is no play.
+- players: the players clearly involved in the notable moment, each described by what they wear in these frames (for example "black shirt", "white tank top"). Empty if unsure.
+- excitement: 0-10, how impressive or intense the play is. 0-1 no play. 2-3 a short ordinary rally. 4-5 a rally with several hits on each side. 6-7 a long rally or a hard attack. 8-10 a big spike or smash, or a very long rally full of saves.
+- funny: 0-10, how funny the moment is. 0-2 for ordinary play and ordinary mistakes. 3-5 for something a bit silly. 6 or more only when the audio list shows laughter or something clearly comical happens.
+- peak_offset_s: seconds from the start of the stretch when the notable moment happens (the hit, the fall, the winning touch), not when people react to it. For a conversation, when it starts.
+
+Be honest: most stretches are ordinary rallies, downtime or small talk, with low scores. Answer with JSON only.

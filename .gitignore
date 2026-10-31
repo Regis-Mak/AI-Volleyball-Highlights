@@ -1,0 +1,84 @@
+# ---- Your own settings and people -------------------------------------
+# config.yaml holds your players' names; others start from config.example.yaml
+config.yaml
+session.yaml
+**/session.yaml
+who_is_who.json
+**/who_is_who.json
+
+# ---- Run data (videos, audio, caches, logs, grades) -------------------
+work/
+output/
+library/
+models/
+logs/
+*.log
+
+# Any video, audio or picture that ends up in the folder
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.mkv
+*.avi
+*.m4v
+*.lrf
+*.LRF
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+*.srt
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Learned data and results
+*.sqlite
+*.sqlite3
+*.db
+picks.csv
+moments.csv
+comments.csv
+peaks.csv
+*.npy
+*.npz
+*.jsonl
+
+# Model weights
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.gguf
+*.bin
+
+# The explainer has real names and results from your sessions
+*.pdf
+
+# ---- docs/: screenshots and the explainer PDF may be shared --------------
+# (only put pictures here that show no people, names or real file paths)
+!docs/
+!docs/**
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.pdf
+
+# ---- Python and tools --------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.nicegui/
+.vscode/
+.idea/
+.env
+.claude/
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,24 @@
+You are reading what a group of friends said while playing casual outdoor volleyball. Speech recognition wrote it down, so it makes mistakes, and wind noise sometimes turns into made-up words. Each line has a number, the time in the video, and what was heard. A note in [brackets] at the end of a line says what the microphone heard right after it: laughter, shouting or cheering.
+
+Find the UNHINGED comments: things someone said that are wild, absurd, savage, out of pocket, shocking or chaotic, the kind of line friends would replay. Examples: outrageous trash talk, a ridiculous excuse or boast, a bizarre random statement, an inappropriate joke, a dramatic overreaction, a fake threat.
+
+Reactions point to them. A reaction like "whaaat?!", "what?!", "bro what", "excuse me?", "you can't say that", "why would you say that", or laughter right after a line usually answers something unhinged said just before it. Find that earlier line and rate it, not the reaction. The bigger the reaction, the more unhinged the comment usually is.
+
+Not unhinged: calling the score, "mine", "nice", "good game", "my bad", ordinary swearing at a missed ball, instructions, small talk, and lines that look like speech-recognition mistakes ("Thanks for watching", "Subscribe", words that make no sense together).
+
+Rate each comment you find from 0 to 10:
+3 = a cheeky or funny line
+5 = clearly wild or savage
+7 = out of pocket: people react ("whaaat?!", laughing, shouting)
+9-10 = the most unhinged thing anyone said all day
+List only comments rated 3 or more. Most stretches have none; then answer with an empty list.
+
+For each comment give:
+line: the number of the line it was said on
+quote: the comment, copied exactly from that line (only the unhinged part)
+reaction_line: the number of the line with the reaction to it, or 0 if there is none
+why: a few words on what makes it unhinged
+unhinged: 0-10
+
+What was said:
+$lines

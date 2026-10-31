@@ -1,0 +1,14 @@
+# Install PyTorch with CUDA FIRST (see README), then: pip install -r requirements.txt
+# Keeps the GPU build of PyTorch when a package below needs torch or torchvision
+--extra-index-url https://download.pytorch.org/whl/cu128
+numpy>=1.26
+pyyaml>=6
+pydantic>=2.5
+faster-whisper>=1.1       # 1.1+ knows the large-v3-turbo model
+panns-inference>=0.1.1    # Cnn14 AudioSet tagger (pulls in torchlibrosa, librosa)
+rich>=13                  # colour output and live progress bars
+nicegui>=3.0,<4           # the Grade screen (local browser app)
+lightgbm>=4.0             # the ranker, once there are a few hundred labels
+ultralytics>=8.3          # player tracking for nametags and vertical shorts (YOLO)
+lap>=0.5.12               # the tracker's matching step
+transformers>=4.45        # picture fingerprints for the example memory (SigLIP)

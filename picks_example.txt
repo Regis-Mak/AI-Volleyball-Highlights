@@ -1,0 +1,7 @@
+# Phase 1 check: one moment per line. Lines starting with # are ignored.
+# A single time uses render.default_pre_s / default_post_s from config.yaml.
+3:10
+12:45
+20:02-20:15     # explicit start-end
+31:00
+47:30

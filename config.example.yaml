@@ -1,0 +1,294 @@
+# Volleyball highlights config. Everything tunable lives here, so tuning
+# never needs a code change. Paths are relative to this file's folder.
+
+work_dir: work        # per-game cache: work/<game>/
+output_dir: output    # final videos:   output/<game>/
+
+# Names the Who is who screen offers as you type. Nobody is recognised by
+# shirt colour (shirts change every week): the tool finds the people and you
+# name them. A session.yaml in a session folder can offer a different list.
+players: []         # e.g. [Alex, Sam, Jordan]
+
+
+ingest:
+  proxy_height: 720           # analysis proxy for motion + VLM stages
+  proxy_fps: 30
+  # Wind cleanup applied to the analysis audio (not to rendered clips).
+  # highpass cuts wind rumble; afftdn is a gentle broadband denoiser.
+  audio_filter: "highpass=f=120,afftdn=nf=-25"
+
+render:
+  encoder: auto               # auto | h264_nvenc | libx264
+  height: 2160                # output height (2160 = 4K); never upscales past the source
+  fps: 30
+  fade_s: 0.25                # short fade at each clip edge to hide hard cuts
+  # Between clips: dip to black (fade), cross-dissolve, or swipe (the next clip
+  # slides in). How often each is used; clips with nametags always dip.
+  transitions: {fade: 0.5, dissolve: 0.35, swipe: 0.15}
+  transition_s: 0.5           # how long a dissolve or swipe takes
+  audio_bitrate: 192k
+  # A single hand-picked timestamp becomes [t - pre_s, t + post_s].
+  default_pre_s: 6
+  default_post_s: 6
+  nvenc_args: ["-preset", "p5", "-rc", "vbr", "-cq", "21", "-b:v", "0"]
+  x264_args: ["-preset", "veryfast", "-crf", "20"]
+
+audio:
+  whisper:
+    enabled: true
+    model: large-v3-turbo     # fits easily in 16 GB; use "small" for a quick test
+    device: cuda              # cuda | cpu (falls back to cpu if CUDA fails)
+    compute_type: float16     # float16 on GPU, int8 on CPU
+    language: en              # null = auto-detect
+    vad_filter: true          # skips wind-only stretches, cuts hallucinations
+  panns:
+    enabled: true
+    device: cuda
+    window_s: 2.0             # each second is scored from a 2 s window centered on it
+    batch_size: 32
+    # Each signal is scaled so the game's strongest moments reach ~1, but a raw
+    # probability below this never counts as "strong" (stops noise inflating).
+    min_full_scale: 0.3
+    # AudioSet class names grouped into the three reaction signals.
+    # A signal's score is the max probability over its classes.
+    classes:
+      laugh: [Laughter, Giggle, Snicker, Belly laugh, "Chuckle, chortle", Baby laughter]
+      cheer: [Cheering, Applause, Clapping, Crowd]
+      shout: [Shout, Yell, Screaming, Children shouting, Battle cry, Bellow, Whoop, Gasp, Groan]
+      # Not a reaction: used to discount loudness spikes that are just wind gusts.
+      wind: [Wind, "Wind noise (microphone)"]
+  loudness:
+    baseline_s: 60            # loudness is measured against a rolling median this long
+    full_scale_db: 12         # this many dB above that baseline scores 1.0
+  # Phrases in the transcript that usually mean something just happened.
+  keywords: ["oh my god", "no way", "let's go", "lets go", "what was that", "oh no",
+             "are you kidding", "holy", "nice", "unbelievable", "wow", "ouch", "dude"]
+  # Reaction score = weighted sum of the per-second signals (each roughly 0-1).
+  weights:
+    laugh: 1.0
+    cheer: 0.8
+    shout: 0.7
+    loudness: 0.5
+    keyword: 0.4
+    speech_burst: 0.3         # burst of talking right after t, vs. the game's norm
+  smooth_s: 3                 # moving-average width before peak picking
+  peaks:
+    min_separation_s: 20      # two peaks closer than this count as one moment
+    top_n: 40                 # peaks written to peaks.csv
+
+motion:
+  sample_fps: 4               # frames per second compared for movement
+  # A 24 s window counts as idle when its movement is below this fraction of
+  # the game's typical movement AND nobody reacted. Idle windows skip the VLM.
+  idle_fraction: 0.35
+  keep_if_reaction: 0.12      # never skip a window whose audio reaction reaches this
+
+vlm:
+  model: qwen3-vl:8b-instruct  # 4b-instruct for 8 GB VRAM, 8b-instruct for 12-16 GB; plain qwen3-vl:8b is the slow "thinking" version
+  host: http://localhost:11434
+  window_s: 24
+  hop_s: 16                   # 24 s windows every 16 s = 8 s overlap
+  base_fps: 1                 # baseline frames per second sent to the model
+  burst_fps: 4                # denser frames just before an audio reaction peak...
+  burst_s: 3                  # ...over this many seconds
+  burst_min_reaction: 0.15    # reaction level that counts as a peak worth a burst
+  max_frames: 40
+  frame_width: 640            # smaller = faster; the proxy is 1280 wide
+  num_ctx: 16384              # model context; must fit frames + prompt
+  temperature: 0.1
+  max_windows: 0              # 0 = all; set e.g. 10 for a quick trial run
+  timeout_s: 300
+
+review:
+  top_n: 20                   # Phase 2/3 checks: render this many moments as one video
+  pre_s: 8                    # reactions come after the play, so look further back
+  post_s: 4
+  label_clips: true           # burn "#rank  mm:ss  laugh/cheer/shout" into each clip
+  font_file: auto             # auto = Arial on Windows, system default elsewhere
+
+# ----------------------------------------------------------------- Phase 4
+session:
+  # Two files count as one recording split by the camera when the second
+  # starts within this many seconds of where the first ended.
+  join_tolerance_s: 2
+
+fuse:
+  # Moment score = these weights x (rally length, spike power, excitement/10,
+  # fun, audio reaction) + a bonus by label. rally: 0 for rallies of
+  # rally_short_s or less, 1 from rally_long_s; attack: Qwen's 0-10 for the
+  # hardest spike. fun = fun_mix x funny/10 + the rest x laughter.
+  weights: {rally: 0.3, attack: 0.3, excitement: 0.2, funny: 0.1, reaction: 0.1}
+  fun_mix: 0.6                # how much of "funny" is Qwen's opinion vs the group laughing
+  label_bonus: {great_play: 0.15, blooper: 0.05, chaos: 0.05, celebration: 0.05, conversation: 0.0,
+                rally: 0.0, reaction: 0.0}
+  audio_only_factor: 0.8      # reactions the vision model didn't tag count a bit less
+  audio_min_reaction: 0.3     # ...and only when the reaction is at least this strong
+  reaction_lookback_s: 2      # reactions are measured from 2 s before the moment...
+  reaction_lookahead_s: 8     # ...to 8 s after it (laughter comes after the play)
+  merge_within_s: 10          # moments closer than this are the same moment
+  # Seconds of footage before and after the key instant, by label.
+  clip:
+    great_play:  {pre_s: 8,  post_s: 4}
+    blooper:     {pre_s: 6,  post_s: 6}
+    celebration: {pre_s: 4,  post_s: 6}
+    chaos:       {pre_s: 8,  post_s: 4}
+    rally:       {pre_s: 10, post_s: 3}
+    conversation: {pre_s: 2, post_s: 16}   # from when the talking starts
+    reaction:    {pre_s: 8,  post_s: 4}
+  extend_while_reaction: 0.25 # keep the clip running while the group still reacts...
+  max_extend_s: 6             # ...for up to this many extra seconds
+  min_clip_s: 6
+  max_clip_s: 20
+  rally_short_s: 5            # rallies this short get nothing for length...
+  rally_long_s: 20            # ...this long or longer get the full rally weight
+  max_rally_clip_s: 60        # a whole rally (with its celebration) up to this long
+  # These labels get the whole rally: from just before the serve, through the
+  # celebration, stopping just before the next serve.
+  whole_rally_labels: [great_play, rally, chaos]
+  serve_pre_s: 1.5            # start this long before the serve (the toss)
+  celebrate_min_s: 4          # keep at least this long after the ball dies...
+  celebrate_max_s: 15         # ...and up to this long while the group still reacts
+  next_serve_gap_s: 0.5       # stop this long before the next serve
+
+reel:
+  target_min: 20              # aim for this long...
+  min_min: 18
+  max_min: 22
+  max_fraction: 0.25          # ...but never more than this share of the footage
+  min_score: 0.25             # moments below this never make the reel
+  merge_gap_s: 1.5            # clips closer than this are joined into one
+  max_merged_s: 70            # a whole rally's clip can run up to 60 s
+  order: chronological        # chronological | best_first
+
+# When someone says "clip that" (or "clip it", "someone clip that"...), that
+# play also becomes its own video: output/<session>/<session> clip that <n>.mp4
+clip_that:
+  enabled: true
+  phrases: ['\bclip[\s,.!-]*(?:that|it|this)\b', '\bthat''?s a clip\b', '\bclip-?worthy\b']
+  lookback_s: 25              # the play it means peaked at most this long before the words
+  before_s: 15                # no tagged play found: start this long before the words
+  after_s: 4                  # keep this long after the words
+  max_s: 45
+  min_gap_s: 20               # "clip that! clip that!" is one clip
+  reel_bonus: 0.3             # the play also counts this much more for the reel
+
+# Unhinged comments: Qwen reads what everyone said (the transcript, no
+# pictures) and rates how unhinged each comment is, 0-10. A reaction right
+# after it ("whaaat?!", laughter) makes it count more. Every rated comment
+# is listed in work/<session>/comments.csv.
+comments:
+  enabled: true
+  model: ''                   # '' = vlm.model (nothing extra to download)
+  lines_per_read: 30          # transcript lines Qwen reads at a time...
+  overlap_lines: 6            # ...overlapping, so a line and its reaction are read together
+  # A reaction like these (regular expressions, any case) within cue_window_s
+  # after a comment adds cue_boost; clear laughter adds laugh_boost.
+  cues: ['\bwh+a{2,}t+\b', '(?:^|[.!?]\s+)wh+a+t+\s*[?!]+',
+         '\bwhat the heck\b', '\b(?:bro|yo|dude|bruh),? what\b',
+         '\bexcuse me\b', '\byou can''?t (?:just )?say that\b',
+         '\bwhy would you (?:say|do) that\b', '\bwho says that\b', '\bno shot\b',
+         '\bbr+u+h+\b', '\bare you serious\b', '\bthat''?s (?:crazy|insane|wild)\b',
+         '\byou''?re (?:crazy|insane|wild)\b']
+  cue_window_s: 8
+  cue_boost: 2
+  laugh_boost: 1
+  min_unhinged: 5             # this or more (after boosts) gets a place in the reel...
+  max_reel_share: 0.3         # ...up to this share of it, most unhinged first
+  score_weight: 0.4           # x unhinged/10, added to the moment's score
+  pre_s: 1.5                  # clip starts this long before the comment...
+  post_s: 3                   # ...and runs this long past the reaction
+  max_clip_s: 30
+
+shorts:
+  enabled: false              # true = also make 30-60 s themed shorts
+  min_s: 30
+  max_s: 60
+  max_per_theme: 2            # e.g. "bloopers 1" and "bloopers 2"
+  min_moments: 2
+  order: best_first           # best_first hooks viewers; or chronological
+  # rank_by: score | hype (excitement) | fun. labels: [] = any label.
+  themes:
+    top_plays:    {title: top plays, labels: [great_play, chaos], rank_by: hype, min_value: 0.5}
+    bloopers:     {title: bloopers, labels: [blooper], rank_by: fun, min_value: 0.4}
+    funniest:     {title: funniest moments, labels: [], rank_by: fun, min_value: 0.5}
+    celebrations: {title: celebrations, labels: [celebration], rank_by: score, min_value: 0.35}
+    conversations: {title: conversations, labels: [conversation], rank_by: score, min_value: 0.1}
+
+# ----------------------------------------------------------------- Phase 4b
+# Learning: library\ keeps every moment and label across sessions (--force
+# never touches it), and a small ranker retrains after every run.
+learning:
+  enabled: true
+  library_dir: library
+  save_frames: true           # keep the frames Qwen saw (a few hundred MB per hour of footage)
+  # How much each kind of label counts.
+  trust: {hand: 1.0, cut: 0.6, trim: 0.5, kept: 0.3, agree: 0.4}
+  self_made_cap: 0.5          # tool-made labels never exceed this share of the training weight
+  ranker:
+    enabled: true
+    min_labels: 30            # start learning once this many moments have labels from you
+    blend_full_at: 300        # ...and fully replace the config weights at this many
+    model: auto               # auto (logistic, LightGBM from lightgbm_from labels) | logistic | lightgbm
+    lightgbm_from: 400
+  test_set:
+    target: 100               # moments to grade with --grade test
+    min_to_check: 20          # below this, new versions are cross-checked on your other labels
+  grade:
+    per_session: 10           # moments per session in a quick review
+    port: 8765                # the Grade screen opens at http://localhost:8765
+  # Example memory: Qwen sees similar moments from earlier games, and how you
+  # judged them, while it tags. Picture fingerprints come from SigLIP
+  # (downloaded once into models\, about 800 MB).
+  examples:
+    enabled: true
+    model: google/siglip-base-patch16-224
+    device: auto              # auto = the GPU when there is one
+    count: 4                  # past moments shown per window
+    min_examples: 20          # starts once this many moments from earlier sessions have labels
+    min_similarity: 0.2       # how alike a past moment must look to be shown
+    min_trust: 0.5            # only your grades, cuts and trims (not "kept" or auto labels)
+  # Auto-tune: re-picks the scoring weights, clip lengths and reel cutoff from
+  # your labels after each run. This file never changes; Progress shows what's on.
+  tune:
+    enabled: true
+    min_labels: 40            # scoring and reel cutoff are tuned from this many labelled moments
+    min_trims: 5              # a label's clip length is tuned after this many trims
+  # Phase 7 prep: the training set for fine-tuning Qwen (--export-training).
+  finetune:
+    min_labels: 500           # labelled moments before fine-tuning is worth trying
+    min_trust: 0.5            # only your grades, cuts and trims (not "kept" or auto labels)
+    val_share: 0.1            # share of moments held back to watch the training
+
+# ----------------------------------------------------------------- Phase 5
+# Player tracking for nametags and vertical shorts (YOLO; the model is
+# downloaded once into models\ on first use, about 20 MB).
+tracking:
+  model: yolo11s.pt           # yolo11n.pt = faster, yolo11m.pt = more accurate
+  models_dir: models
+  device: auto                # auto = the GPU when there is one
+  fps: 10                     # frames per second the tracker looks at
+  imgsz: 1280                 # bigger finds far-away players better (slower)
+  conf: 0.25
+
+# Minecraft-style nametags over the players at the start of the reel.
+nametags:
+  enabled: true
+  seconds: 18                 # how much of the reel's opening gets tags
+  shorts: false               # also tag the start of each short
+  text_height: 0.02           # letter height as a share of the video height
+  box_opacity: 0.45           # the see-through dark box behind each name
+  text_color: "#ffffff"
+  font: builtin               # or a .ttf file, e.g. a pixel font such as Monocraft
+  fade_s: 0.4
+  min_visible_s: 2.0          # players seen for less than this get no tag
+
+# 9:16 vertical shorts for phones.
+vertical:
+  shorts: landscape           # landscape | vertical | both (each short made both ways)
+  width: 1080                 # the 9:16 shape; also the size when resize is true
+  height: 1920
+  resize: false               # false = a straight crop of the 4K frame, nothing resized (1216x2160 at zoom 1)
+  zoom: 1                     # 1 = full height (most pixels); higher = closer on the players, fewer pixels (1.8 = 676x1200)
+  dead_zone: 0.3              # the action can move this much of the window before it pans
+  max_pan: 0.35               # fastest pan, in frame widths per second
+  smooth_s: 0.6
